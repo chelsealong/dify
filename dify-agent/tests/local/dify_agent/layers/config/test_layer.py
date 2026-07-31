@@ -80,10 +80,7 @@ def _skill_pull_output(*names: str, include_skill: bool = True) -> str:
 def _file_pull_output(*names: str, include_file: bool = True) -> str:
     items = []
     if include_file:
-        items = [
-            {"name": name, "path": f"/workspace/.dify_conf/files/{name}"}
-            for name in names or ("guide.txt",)
-        ]
+        items = [{"name": name, "path": f"/workspace/.dify_conf/files/{name}"} for name in names or ("guide.txt",)]
     return json.dumps({"items": items})
 
 
