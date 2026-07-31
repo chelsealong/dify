@@ -9,6 +9,7 @@ control plane; they never create another runtime-visible upload path.
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import binascii
 import json
@@ -53,6 +54,8 @@ _READ_OUTPUT_TIMEOUT_SECONDS = 0.0
 _DEFAULT_TERMINATE_GRACE_SECONDS = 10.0
 _FILE_TRANSFER_TIMEOUT_SECONDS = 60.0
 _SHELLCTL_OUTPUT_LIMIT_BYTES = 16 * 1024
+_INITIAL_CONNECT_ATTEMPTS = 3
+_INITIAL_CONNECT_RETRY_DELAY_SECONDS = 0.1
 _TRANSFER_BEGIN = "<<<DIFY_SHELL_FILE_BEGIN>>>"
 _TRANSFER_END = "<<<DIFY_SHELL_FILE_END>>>"
 _DOWNLOAD_MISSING_EXIT_CODE = 66
@@ -282,9 +285,18 @@ class ShellctlCommands(ShellCommandProtocol):
             workspace_dir=self.workspace_dir,
         )
         resolved_env = _lease_env(env, home_dir=self.home_dir)
-        return _from_job_result(
-            await _run_client_call(self.client.run(script, cwd=resolved_cwd, env=resolved_env, timeout=timeout))
-        )
+        for attempt in range(_INITIAL_CONNECT_ATTEMPTS):
+            try:
+                result = await _run_client_call(
+                    self.client.run(script, cwd=resolved_cwd, env=resolved_env, timeout=timeout)
+                )
+            except ShellProviderError as exc:
+                if not _is_initial_connect_failure(exc) or attempt + 1 >= _INITIAL_CONNECT_ATTEMPTS:
+                    raise
+                await asyncio.sleep(_INITIAL_CONNECT_RETRY_DELAY_SECONDS * (attempt + 1))
+            else:
+                return _from_job_result(result)
+        raise AssertionError("initial shellctl connect retry loop exhausted")
 
     async def wait(
         self,
@@ -533,6 +545,10 @@ async def _run_client_call(awaitable: Awaitable[ResultT]) -> ResultT:
         raise ShellProviderError(str(exc), code="request_error") from exc
     except ShellctlClientError as exc:
         raise _map_error(exc) from exc
+
+
+def _is_initial_connect_failure(exc: ShellProviderError) -> bool:
+    return isinstance(exc.__cause__, (httpx.ConnectError, httpx.ConnectTimeout))
 
 
 def _map_error(exc: ShellctlClientError) -> ShellProviderError:

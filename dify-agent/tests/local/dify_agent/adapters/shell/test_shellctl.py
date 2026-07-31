@@ -487,6 +487,46 @@ def test_commands_map_http_request_error_to_shell_provider_error() -> None:
     asyncio.run(scenario())
 
 
+def test_commands_retry_initial_connect_errors() -> None:
+    request = httpx.Request("POST", "http://shellctl.example/v1/jobs/run")
+    attempts = 0
+
+    def run_handler(script: str, cwd: str | None, env: dict[str, str] | None, timeout: float) -> _Job:
+        nonlocal attempts
+        del script, cwd, env, timeout
+        attempts += 1
+        if attempts < 3:
+            raise httpx.ConnectError("connection failed", request=request)
+        return _Job(job_id="run-job", status="exited", done=True, output="ok", exit_code=0)
+
+    client = FakeShellctlClient(run_handler=run_handler)
+
+    async def scenario() -> None:
+        commands = ShellctlCommands(_client_protocol(client))
+        result = await commands.run("pwd", timeout=2.5)
+        assert result.output == "ok"
+
+    asyncio.run(scenario())
+    assert attempts == 3
+
+
+def test_commands_do_not_retry_initial_read_errors() -> None:
+    request = httpx.Request("POST", "http://shellctl.example/v1/jobs/run")
+    client = FakeShellctlClient(
+        run_handler=lambda script, cwd, env, timeout: (_ for _ in ()).throw(
+            httpx.ReadError("response failed", request=request)
+        )
+    )
+
+    async def scenario() -> None:
+        commands = ShellctlCommands(_client_protocol(client))
+        with pytest.raises(ShellProviderError, match="response failed"):
+            await commands.run("pwd", timeout=2.5)
+
+    asyncio.run(scenario())
+    assert len(client.run_calls) == 1
+
+
 def test_commands_preserve_shellctl_structured_error_fields() -> None:
     client = FakeShellctlClient(
         run_handler=lambda script, cwd, env, timeout: (_ for _ in ()).throw(
