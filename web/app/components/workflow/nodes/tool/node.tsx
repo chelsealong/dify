@@ -1,10 +1,15 @@
 import type { FC } from 'react'
 import type { ToolNodeType } from './types'
-import type { NodeProps } from '@/app/components/workflow/types'
+import type { Node, NodeProps } from '@/app/components/workflow/types'
 import * as React from 'react'
 import { useTranslation } from 'react-i18next'
+import { useNodes } from 'reactflow'
 import { FormTypeEnum } from '@/app/components/header/account-setting/model-provider-page/declarations'
 import { InstallPluginButton } from '@/app/components/workflow/nodes/_base/components/install-plugin-button'
+import { isSystemVar } from '@/app/components/workflow/nodes/_base/components/variable/utils'
+import { VariableLabelInNode } from '@/app/components/workflow/nodes/_base/components/variable/variable-label'
+import { VarKindType } from '@/app/components/workflow/nodes/_base/types'
+import { BlockEnum } from '@/app/components/workflow/types'
 import { useNodePluginInstallation } from '../../hooks/use-node-plugin-installation'
 import { isToolAuthorizationRequired } from './auth'
 import useCurrentToolCollection from './hooks/use-current-tool-collection'
@@ -13,6 +18,7 @@ const Node: FC<NodeProps<ToolNodeType>> = ({ data }) => {
   const { t } = useTranslation()
   const { tool_configurations, paramSchemas } = data
   const toolConfigs = Object.keys(tool_configurations || {})
+  const nodes: Node[] = useNodes()
   const { isChecking, isMissing, uniqueIdentifier, canInstall, onInstallSuccess, shouldDim } =
     useNodePluginInstallation(data)
   const { currCollection } = useCurrentToolCollection(data.provider_type, data.provider_id)
@@ -41,60 +47,79 @@ const Node: FC<NodeProps<ToolNodeType>> = ({ data }) => {
       {(hasConfigs || showAuthorizationWarning) && (
         <div className="space-y-0.5" aria-disabled={shouldDim}>
           {hasConfigs &&
-            toolConfigs.map((key) => (
-              <div
-                key={key}
-                className="flex h-6 items-center justify-between space-x-1 rounded-md bg-workflow-block-parma-bg px-1 text-xs font-normal text-text-secondary"
-              >
+            toolConfigs.map((key) => {
+              const config = tool_configurations[key]
+              const value = config?.value
+              const isVariableSelector =
+                config?.type === VarKindType.variable && Array.isArray(value)
+              const isModelValue =
+                !!value && typeof value === 'object' && !Array.isArray(value) && 'model' in value
+
+              let node: Node | undefined
+              if (isVariableSelector) {
+                const isSystem = isSystemVar(value)
+                node = isSystem
+                  ? nodes.find((n) => n.data.type === BlockEnum.Start)
+                  : nodes.find((n) => n.id === value[0])
+              }
+
+              return (
                 <div
-                  title={key}
-                  className="max-w-25 shrink-0 truncate text-xs font-medium text-text-tertiary uppercase"
+                  key={key}
+                  className="flex h-6 items-center justify-between space-x-1 rounded-md bg-workflow-block-parma-bg px-1 text-xs font-normal text-text-secondary"
                 >
-                  {key}
-                </div>
-                {typeof tool_configurations[key].value === 'string' && (
                   <div
-                    title={tool_configurations[key].value}
-                    className="w-0 shrink-0 grow truncate text-right text-xs font-normal text-text-secondary"
+                    title={key}
+                    className="max-w-25 shrink-0 truncate text-xs font-medium text-text-tertiary uppercase"
                   >
-                    {paramSchemas?.find((i) => i.name === key)?.type === FormTypeEnum.secretInput
-                      ? '********'
-                      : tool_configurations[key].value}
+                    {key}
                   </div>
-                )}
-                {typeof tool_configurations[key].value === 'number' && (
-                  <div
-                    title={
-                      Number.isNaN(tool_configurations[key].value)
-                        ? ''
-                        : tool_configurations[key].value
-                    }
-                    className="w-0 shrink-0 grow truncate text-right text-xs font-normal text-text-secondary"
-                  >
-                    {Number.isNaN(tool_configurations[key].value)
-                      ? ''
-                      : tool_configurations[key].value}
-                  </div>
-                )}
-                {Array.isArray(tool_configurations[key].value) && (
-                  <div
-                    title={tool_configurations[key].value.join(', ')}
-                    className="w-0 shrink-0 grow truncate text-right text-xs font-normal text-text-secondary"
-                  >
-                    {tool_configurations[key].value.join(', ')}
-                  </div>
-                )}
-                {typeof tool_configurations[key] !== 'string' &&
-                  tool_configurations[key]?.type === FormTypeEnum.modelSelector && (
+                  {typeof value === 'string' && (
                     <div
-                      title={tool_configurations[key].model}
+                      title={value}
                       className="w-0 shrink-0 grow truncate text-right text-xs font-normal text-text-secondary"
                     >
-                      {tool_configurations[key].model}
+                      {paramSchemas?.find((i) => i.name === key)?.type === FormTypeEnum.secretInput
+                        ? '********'
+                        : value}
                     </div>
                   )}
-              </div>
-            ))}
+                  {typeof value === 'number' && (
+                    <div
+                      title={Number.isNaN(value) ? '' : String(value)}
+                      className="w-0 shrink-0 grow truncate text-right text-xs font-normal text-text-secondary"
+                    >
+                      {Number.isNaN(value) ? '' : value}
+                    </div>
+                  )}
+                  {isVariableSelector && (
+                    <div className="w-0 shrink-0 grow">
+                      <VariableLabelInNode
+                        variables={value}
+                        nodeType={node?.data.type}
+                        nodeTitle={node?.data.title}
+                      />
+                    </div>
+                  )}
+                  {Array.isArray(value) && !isVariableSelector && (
+                    <div
+                      title={value.join(', ')}
+                      className="w-0 shrink-0 grow truncate text-right text-xs font-normal text-text-secondary"
+                    >
+                      {value.join(', ')}
+                    </div>
+                  )}
+                  {isModelValue && (
+                    <div
+                      title={value.model}
+                      className="w-0 shrink-0 grow truncate text-right text-xs font-normal text-text-secondary"
+                    >
+                      {value.model}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           {showAuthorizationWarning && (
             <div className="flex h-6 items-center rounded-md border-[0.5px] border-state-warning-active bg-state-warning-hover px-1.5">
               <span className="mr-1 size-1 shrink-0 rounded-xs bg-text-warning-secondary" />

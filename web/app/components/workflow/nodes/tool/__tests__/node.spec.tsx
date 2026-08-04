@@ -1,5 +1,6 @@
 import type { ToolNodeType } from '../types'
 import { render, screen } from '@testing-library/react'
+import { useNodes } from 'reactflow'
 import { CollectionType } from '@/app/components/tools/types'
 import { BlockEnum } from '@/app/components/workflow/types'
 import Node from '../node'
@@ -19,6 +20,16 @@ vi.mock('../hooks/use-current-tool-collection', () => ({
 vi.mock('@/app/components/workflow/nodes/_base/components/install-plugin-button', () => ({
   InstallPluginButton: () => <button type="button">Install Plugin</button>,
 }))
+
+vi.mock('reactflow', async () => {
+  const actual = await vi.importActual<typeof import('reactflow')>('reactflow')
+  return {
+    ...actual,
+    useNodes: vi.fn(),
+  }
+})
+
+const mockUseNodes = vi.mocked(useNodes)
 
 const createNodeData = (overrides: Partial<ToolNodeType> = {}): ToolNodeType => ({
   title: 'Google Search',
@@ -49,6 +60,15 @@ describe('ToolNode', () => {
       currentTools: [],
       currCollection: undefined,
     })
+    mockUseNodes.mockReturnValue([
+      {
+        id: 'upstream-node-1',
+        data: {
+          title: 'File Upload',
+          type: BlockEnum.Start,
+        },
+      },
+    ] as ReturnType<typeof useNodes>)
   })
 
   describe('Authorization Warning', () => {
@@ -110,5 +130,46 @@ describe('ToolNode', () => {
     )
 
     expect(screen.getByTitle('png, svg')).toHaveTextContent('png, svg')
+  })
+
+  it('should resolve a variable-reference value to the upstream node title instead of showing the raw node id', () => {
+    render(
+      <Node
+        id="tool-node-1"
+        data={createNodeData({
+          tool_configurations: {
+            input_file: { type: 'variable', value: ['upstream-node-1', 'file'] },
+          },
+        })}
+      />,
+    )
+
+    expect(screen.queryByText('upstream-node-1, file')).not.toBeInTheDocument()
+    expect(screen.getByText('File Upload')).toBeInTheDocument()
+    expect(screen.getByText('file')).toBeInTheDocument()
+  })
+
+  it('should render the model name for a model-selector configuration value', () => {
+    render(
+      <Node
+        id="tool-node-1"
+        data={createNodeData({
+          tool_configurations: {
+            model: {
+              type: 'constant',
+              value: {
+                provider: 'langgenius/openai/openai',
+                model: 'gemma4-31b',
+                model_type: 'llm',
+                mode: 'chat',
+                completion_params: {},
+              },
+            },
+          },
+        })}
+      />,
+    )
+
+    expect(screen.getByTitle('gemma4-31b')).toHaveTextContent('gemma4-31b')
   })
 })
