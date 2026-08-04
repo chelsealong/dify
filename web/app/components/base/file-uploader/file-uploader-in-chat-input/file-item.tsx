@@ -40,6 +40,17 @@ const FileItem = ({
   if (!tmp_preview_url && file?.originalFile)
     tmp_preview_url = URL.createObjectURL(file.originalFile.slice()).toString()
   const download_url = url ? `${url}&as_attachment=true` : base64Url
+  const hasInlinePreview =
+    typeCategory === 'audio' || typeCategory === 'video' || typeSubtype === 'pdf'
+
+  const handleNameClick = () => {
+    if (canPreview && hasInlinePreview) {
+      setPreviewUrl(tmp_preview_url || '')
+      return
+    }
+    if (showDownloadAction && download_url)
+      downloadUrl({ url: download_url, fileName: name, target: '_blank' })
+  }
 
   return (
     <>
@@ -67,7 +78,7 @@ const FileItem = ({
         <div
           className="mb-1 line-clamp-2 h-8 cursor-pointer system-xs-medium break-all text-text-tertiary"
           title={name}
-          onClick={() => canPreview && setPreviewUrl(tmp_preview_url || '')}
+          onClick={handleNameClick}
         >
           {name}
         </div>

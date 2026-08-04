@@ -324,6 +324,49 @@ describe('FileItem (chat-input)', () => {
     expect(screen.getByRole('button', { name: 'common.operation.download' })).toBeInTheDocument()
   })
 
+  it('should download the file when clicking a file entry with no inline preview', async () => {
+    const { downloadUrl } = await import('@/utils/download')
+    render(
+      <FileItem
+        file={createFile({
+          name: 'report.csv',
+          type: 'text/csv',
+          url: 'https://example.com/report.csv',
+        })}
+        showDownloadAction
+        canPreview
+      />,
+    )
+
+    fireEvent.click(screen.getByText(/report\.csv/i))
+
+    expect(downloadUrl).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: 'https://example.com/report.csv&as_attachment=true',
+        fileName: 'report.csv',
+      }),
+    )
+  })
+
+  it('should not download when clicking a file entry with showDownloadAction disabled', async () => {
+    const { downloadUrl } = await import('@/utils/download')
+    render(
+      <FileItem
+        file={createFile({
+          name: 'report.csv',
+          type: 'text/csv',
+          url: 'https://example.com/report.csv',
+        })}
+        showDownloadAction={false}
+        canPreview
+      />,
+    )
+
+    fireEvent.click(screen.getByText(/report\.csv/i))
+
+    expect(downloadUrl).not.toHaveBeenCalled()
+  })
+
   it('should not render extension separator when ext is empty', () => {
     render(<FileItem file={createFile({ name: 'noext' })} />)
 
