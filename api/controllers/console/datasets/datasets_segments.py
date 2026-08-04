@@ -599,10 +599,7 @@ class DatasetDocumentSegmentUpdateApi(Resource):
         return "", 204
 
 
-@console_ns.route(
-    "/datasets/<uuid:dataset_id>/documents/<uuid:document_id>/segments/batch_import",
-    "/datasets/batch_import_status/<uuid:job_id>",
-)
+@console_ns.route("/datasets/<uuid:dataset_id>/documents/<uuid:document_id>/segments/batch_import")
 class DatasetDocumentSegmentBatchImportApi(Resource):
     @console_ns.response(200, "Batch import started", console_ns.models[SegmentBatchImportStatusResponse.__name__])
     @setup_required
@@ -664,21 +661,22 @@ class DatasetDocumentSegmentBatchImportApi(Resource):
             return {"error": str(e)}, 500
         return dump_response(SegmentBatchImportStatusResponse, {"job_id": job_id, "job_status": "waiting"}), 200
 
+
+@console_ns.route("/datasets/<uuid:dataset_id>/batch_import_status/<uuid:job_id>")
+class DatasetDocumentSegmentBatchImportStatusApi(Resource):
     @console_ns.response(200, "Batch import status", console_ns.models[SegmentBatchImportStatusResponse.__name__])
     @setup_required
     @login_required
     @account_initialization_required
     @rbac_permission_required(RBACResourceScope.DATASET, RBACPermission.DATASET_READONLY)
-    def get(self, job_id=None, dataset_id: UUID | None = None, document_id: UUID | None = None):
-        if job_id is None:
-            raise NotFound("The job does not exist.")
-        job_id = str(job_id)
-        indexing_cache_key = f"segment_batch_import_{job_id}"
+    def get(self, dataset_id: UUID, job_id: UUID):
+        job_id_str = str(job_id)
+        indexing_cache_key = f"segment_batch_import_{job_id_str}"
         cache_result = redis_client.get(indexing_cache_key)
         if cache_result is None:
             raise ValueError("The job does not exist.")
 
-        response = {"job_id": job_id, "job_status": cache_result.decode()}
+        response = {"job_id": job_id_str, "job_status": cache_result.decode()}
         return dump_response(SegmentBatchImportStatusResponse, response), 200
 
 

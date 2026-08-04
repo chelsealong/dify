@@ -17,6 +17,7 @@ from controllers.console.datasets.datasets_segments import (
     DatasetDocumentSegmentAddApi,
     DatasetDocumentSegmentApi,
     DatasetDocumentSegmentBatchImportApi,
+    DatasetDocumentSegmentBatchImportStatusApi,
     DatasetDocumentSegmentListApi,
     DatasetDocumentSegmentUpdateApi,
 )
@@ -657,15 +658,32 @@ class TestDatasetDocumentSegmentBatchImportApi:
         assert status == 500
         assert "error" in response
 
+
+class TestDatasetDocumentSegmentBatchImportStatusApi:
     def test_get_job_not_found_in_redis(self, app: Flask):
-        api = DatasetDocumentSegmentBatchImportApi()
+        api = DatasetDocumentSegmentBatchImportStatusApi()
         method = unwrap(api.get)
         with (
             app.test_request_context("/"),
             patch("controllers.console.datasets.datasets_segments.redis_client.get", return_value=None),
         ):
             with pytest.raises(ValueError):
-                method(api, job_id="job-1")
+                method(api, dataset_id="ds-1", job_id="job-1")
+
+    def test_get_returns_job_status(self, app: Flask):
+        api = DatasetDocumentSegmentBatchImportStatusApi()
+        method = unwrap(api.get)
+        with (
+            app.test_request_context("/"),
+            patch(
+                "controllers.console.datasets.datasets_segments.redis_client.get",
+                return_value=b"completed",
+            ),
+        ):
+            response, status = method(api, dataset_id="ds-1", job_id="job-1")
+        assert status == 200
+        assert response["job_id"] == "job-1"
+        assert response["job_status"] == "completed"
 
 
 class TestChildChunkAddApi:
@@ -1102,12 +1120,6 @@ class TestSegmentOperationCases:
         assert status == 500
         assert "error" in response
 
-    def test_batch_import_get_job_not_found(self, app: Flask):
-        api = DatasetDocumentSegmentBatchImportApi()
-        method = unwrap(api.get)
-        with (
-            app.test_request_context("/?job_id=invalid-job"),
-            patch("controllers.console.datasets.datasets_segments.redis_client.get", return_value=None),
-        ):
-            with pytest.raises(ValueError):
-                method(api, "invalid-job")
+    def test_batch_import_api_no_longer_serves_status_route(self):
+        """DatasetDocumentSegmentBatchImportApi must stay POST-only; GET moved to its own dataset-scoped route."""
+        assert not hasattr(DatasetDocumentSegmentBatchImportApi, "get")

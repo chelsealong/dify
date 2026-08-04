@@ -85,7 +85,7 @@ const DocumentDetail: FC<DocumentDetailProps> = ({ datasetId, documentId }) => {
   const { mutateAsync: checkSegmentBatchImportProgress } = useCheckSegmentBatchImportProgress()
   const checkProcess = async (jobID: string) => {
     await checkSegmentBatchImportProgress(
-      { jobID },
+      { datasetId, jobID },
       {
         onSuccess: (res) => {
           setImportStatus(res.job_status)
