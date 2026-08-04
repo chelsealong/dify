@@ -1,6 +1,7 @@
 import type { ToolNodeType } from '../types'
 import { render, screen } from '@testing-library/react'
 import { useNodes } from 'reactflow'
+import { FormTypeEnum } from '@/app/components/header/account-setting/model-provider-page/declarations'
 import { CollectionType } from '@/app/components/tools/types'
 import { BlockEnum } from '@/app/components/workflow/types'
 import Node from '../node'
@@ -154,6 +155,7 @@ describe('ToolNode', () => {
       <Node
         id="tool-node-1"
         data={createNodeData({
+          paramSchemas: [{ name: 'model', type: FormTypeEnum.modelSelector }],
           tool_configurations: {
             model: {
               type: 'constant',
@@ -171,5 +173,25 @@ describe('ToolNode', () => {
     )
 
     expect(screen.getByTitle('gemma4-31b')).toHaveTextContent('gemma4-31b')
+  })
+
+  it('should not treat an unrelated object parameter with a "model" key as a model-selector value', () => {
+    render(
+      <Node
+        id="tool-node-1"
+        data={createNodeData({
+          paramSchemas: [{ name: 'config', type: FormTypeEnum.object }],
+          tool_configurations: {
+            config: {
+              type: 'constant',
+              value: { model: { name: 'foo', version: 2 }, other: 'bar' },
+            },
+          },
+        })}
+      />,
+    )
+
+    expect(screen.getByText('config')).toBeInTheDocument()
+    expect(screen.queryByTitle('foo')).not.toBeInTheDocument()
   })
 })

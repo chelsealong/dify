@@ -53,7 +53,10 @@ const Node: FC<NodeProps<ToolNodeType>> = ({ data }) => {
               const isVariableSelector =
                 config?.type === VarKindType.variable && Array.isArray(value)
               const isModelValue =
-                !!value && typeof value === 'object' && !Array.isArray(value) && 'model' in value
+                !!value &&
+                typeof value === 'object' &&
+                !Array.isArray(value) &&
+                paramSchemas?.find((i) => i.name === key)?.type === FormTypeEnum.modelSelector
 
               let node: Node | undefined
               if (isVariableSelector) {
