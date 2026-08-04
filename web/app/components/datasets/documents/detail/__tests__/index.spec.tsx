@@ -532,6 +532,27 @@ describe('DocumentDetail', () => {
         }),
       )
     })
+
+    it('should poll job status scoped to the dataset', async () => {
+      mocks.batchImport.mockImplementation((_payload, { onSuccess }) => {
+        onSuccess({ job_id: 'job-1', job_status: 'waiting' })
+        return Promise.resolve({ job_id: 'job-1', job_status: 'waiting' })
+      })
+      render(<DocumentDetail datasetId="ds-1" documentId="doc-1" />)
+      fireEvent.click(screen.getByTestId('batch-btn'))
+
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('batch-confirm'))
+      })
+
+      expect(mocks.checkProgress).toHaveBeenCalledWith(
+        { datasetId: 'ds-1', jobID: 'job-1' },
+        expect.objectContaining({
+          onSuccess: expect.any(Function),
+          onError: expect.any(Function),
+        }),
+      )
+    })
   })
 
   describe('isFullDocMode', () => {
