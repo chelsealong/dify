@@ -10,6 +10,7 @@ from graphon.model_runtime.entities.message_entities import TextPromptMessageCon
 from pydantic_ai.exceptions import ModelHTTPError, UserError
 from pydantic_ai.messages import (
     InstructionPart,
+    ModelMessage,
     ModelRequest,
     ModelResponse,
     RetryPromptPart,
@@ -327,7 +328,7 @@ class DifyLLMAdapterModelTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cast(TextPart, response.parts[0]).content, "adapter response")
 
     async def test_request_omits_blank_system_prompt_part(self) -> None:
-        messages = [
+        messages: list[ModelMessage] = [
             ModelRequest(
                 parts=[
                     SystemPromptPart("  "),
@@ -365,7 +366,7 @@ class DifyLLMAdapterModelTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cast(TextPart, response.parts[0]).content, "adapter response")
 
     async def test_request_falls_back_to_tool_name_when_tool_description_is_missing(self) -> None:
-        messages = [ModelRequest(parts=[UserPromptPart("hello")])]
+        messages: list[ModelMessage] = [ModelRequest(parts=[UserPromptPart("hello")])]
         request_parameters = ModelRequestParameters(
             function_tools=[
                 ToolDefinition(
