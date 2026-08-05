@@ -326,6 +326,82 @@ class DifyLLMAdapterModelTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.parts[0].part_kind, "text")
         self.assertEqual(cast(TextPart, response.parts[0]).content, "adapter response")
 
+    async def test_request_omits_blank_system_prompt_part(self) -> None:
+        messages = [
+            ModelRequest(
+                parts=[
+                    SystemPromptPart("  "),
+                    SystemPromptPart("request system"),
+                    UserPromptPart("hello"),
+                ]
+            ),
+        ]
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            payload = json.loads(request.content.decode("utf-8"))
+            prompt_messages = payload["data"]["prompt_messages"]
+
+            self.assertEqual([message["role"] for message in prompt_messages], ["system", "user"])
+            self.assertEqual(prompt_messages[0]["content"], "request system")
+
+            return build_stream_response(*single_text_chunk("adapter response", prompt_tokens=11, completion_tokens=7))
+
+        async with self.mock_daemon_stream(httpx.MockTransport(handler)):
+            adapter = DifyLLMAdapterModel(
+                "demo-model",
+                self.make_provider(),
+                model_provider="openai",
+                credentials={"api_key": "secret"},
+            )
+
+            response = await adapter.request(
+                messages,
+                model_settings=None,
+                model_request_parameters=ModelRequestParameters(),
+            )
+
+        self.assertEqual(response.model_name, "demo-model")
+        self.assertEqual(response.parts[0].part_kind, "text")
+        self.assertEqual(cast(TextPart, response.parts[0]).content, "adapter response")
+
+    async def test_request_falls_back_to_tool_name_when_tool_description_is_missing(self) -> None:
+        messages = [ModelRequest(parts=[UserPromptPart("hello")])]
+        request_parameters = ModelRequestParameters(
+            function_tools=[
+                ToolDefinition(
+                    name="weather",
+                    description="",
+                    parameters_json_schema={"type": "object", "properties": {}},
+                )
+            ],
+        )
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            payload = json.loads(request.content.decode("utf-8"))
+            tools_by_name = {tool["name"]: tool for tool in payload["data"]["tools"]}
+
+            self.assertEqual(tools_by_name["weather"]["description"], "weather")
+
+            return build_stream_response(*single_text_chunk("adapter response", prompt_tokens=11, completion_tokens=7))
+
+        async with self.mock_daemon_stream(httpx.MockTransport(handler)):
+            adapter = DifyLLMAdapterModel(
+                "demo-model",
+                self.make_provider(),
+                model_provider="openai",
+                credentials={"api_key": "secret"},
+            )
+
+            response = await adapter.request(
+                messages,
+                model_settings=None,
+                model_request_parameters=request_parameters,
+            )
+
+        self.assertEqual(response.model_name, "demo-model")
+        self.assertEqual(response.parts[0].part_kind, "text")
+        self.assertEqual(cast(TextPart, response.parts[0]).content, "adapter response")
+
     async def test_request_uses_unique_fallback_ids_for_same_name_tool_calls(self) -> None:
         messages = [
             ModelRequest(parts=[UserPromptPart("hello")]),
