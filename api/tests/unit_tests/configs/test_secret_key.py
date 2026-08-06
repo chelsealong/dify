@@ -68,6 +68,23 @@ class TestResolveSecretKey:
         mock_save.assert_not_called()
         lock.release.assert_called_once()
 
+    def test_returns_generated_key_even_when_lock_release_fails(self):
+        """Regression test: a lock.release() failure (e.g. TTL expiry racing a slow
+        storage.save()) must not mask an already-persisted, already-generated key.
+        """
+        lock = _make_redis_lock(acquired=True)
+        lock.release.side_effect = Exception("Cannot release a lock that's no longer owned")
+        with (
+            patch("configs.secret_key.storage.load_once", side_effect=FileNotFoundError()),
+            patch("configs.secret_key.storage.save") as mock_save,
+            patch("configs.secret_key.redis_client.lock", return_value=lock),
+        ):
+            generated = _load_or_create_secret_key()
+
+        assert generated
+        mock_save.assert_called_once()
+        lock.release.assert_called_once()
+
     def test_raises_when_lock_times_out_and_no_key_persisted(self):
         lock = _make_redis_lock(acquired=False)
         with (

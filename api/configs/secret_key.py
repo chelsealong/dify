@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 import secrets
 
 from extensions.ext_redis import redis_client
 from extensions.ext_storage import storage
+
+logger = logging.getLogger(__name__)
 
 GENERATED_SECRET_KEY_FILENAME = ".dify_secret_key"
 GENERATED_SECRET_KEY_LOCK_NAME = "dify_secret_key_generation_lock"
@@ -69,4 +72,7 @@ def _load_or_create_secret_key() -> str:
 
         return generated_key
     finally:
-        lock.release()
+        try:
+            lock.release()
+        except Exception:
+            logger.warning("Failed to release SECRET_KEY generation lock", exc_info=True)
