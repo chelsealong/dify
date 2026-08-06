@@ -48,8 +48,10 @@ describe('useAvailableNodesMetaData', () => {
 
     expect(nodeTypes).toContain(BlockEnum.Agent)
     expect(nodeTypes).not.toContain(BlockEnum.AgentV2)
+    // nodesMap still carries both variants so existing nodes of the hidden
+    // variant can still be validated, copied and duplicated.
     expect(result.current.nodesMap?.[BlockEnum.Agent]).toBeDefined()
-    expect(result.current.nodesMap?.[BlockEnum.AgentV2]).toBeUndefined()
+    expect(result.current.nodesMap?.[BlockEnum.AgentV2]).toBeDefined()
   })
 
   it('should include workflow-specific trigger and end nodes outside chat mode', () => {
@@ -96,8 +98,13 @@ describe('useAvailableNodesMetaData', () => {
 
     expect(nodeTypes).toContain(BlockEnum.AgentV2)
     expect(nodeTypes).not.toContain(BlockEnum.Agent)
+    // Existing legacy Agent nodes still need a nodesMap entry (with its
+    // checkValid validator) even though the "add block" panel now only
+    // offers Agent v2 — otherwise those nodes can't be validated, copied or
+    // duplicated. See https://github.com/langgenius/dify/issues/40056.
     expect(result.current.nodesMap?.[BlockEnum.AgentV2]).toBeDefined()
-    expect(result.current.nodesMap?.[BlockEnum.Agent]).toBeUndefined()
+    expect(result.current.nodesMap?.[BlockEnum.Agent]).toBeDefined()
+    expect(result.current.nodesMap?.[BlockEnum.Agent]?.checkValid).toBeTypeOf('function')
   })
 
   it('should expose legacy Agent instead of Agent v2 when Agent v2 is disabled', () => {
@@ -110,6 +117,6 @@ describe('useAvailableNodesMetaData', () => {
     expect(nodeTypes).toContain(BlockEnum.Agent)
     expect(nodeTypes).not.toContain(BlockEnum.AgentV2)
     expect(result.current.nodesMap?.[BlockEnum.Agent]).toBeDefined()
-    expect(result.current.nodesMap?.[BlockEnum.AgentV2]).toBeUndefined()
+    expect(result.current.nodesMap?.[BlockEnum.AgentV2]).toBeDefined()
   })
 })

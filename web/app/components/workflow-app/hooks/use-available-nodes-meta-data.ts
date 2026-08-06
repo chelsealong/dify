@@ -44,15 +44,12 @@ export const useAvailableNodesMetaData = () => {
     [isChatMode],
   )
 
+  // Keep both Agent and Agent V2 metadata here so nodesMap can still validate,
+  // copy and duplicate existing nodes of the variant that's hidden from the
+  // "add block" panel below.
   const mergedNodesMetaData = useMemo(() => {
-    const commonNodes = WORKFLOW_COMMON_NODES.filter((node) =>
-      shouldUseAgentV2
-        ? node.metaData.type !== BlockEnum.Agent
-        : node.metaData.type !== BlockEnum.AgentV2,
-    )
-
     return [
-      ...commonNodes,
+      ...WORKFLOW_COMMON_NODES,
       startNodeMetaData,
       ...(isChatMode
         ? [AnswerDefault]
@@ -64,7 +61,7 @@ export const useAvailableNodesMetaData = () => {
             TriggerPluginDefault,
           ]),
     ]
-  }, [isChatMode, shouldUseAgentV2, startNodeMetaData])
+  }, [isChatMode, startNodeMetaData])
 
   const availableNodesMetaData = useMemo(
     () =>
@@ -107,13 +104,23 @@ export const useAvailableNodesMetaData = () => {
     [availableNodesMetaData],
   )
 
+  const addableNodesMetaData = useMemo(
+    () =>
+      availableNodesMetaData.filter((node) =>
+        shouldUseAgentV2
+          ? node.metaData.type !== BlockEnum.Agent
+          : node.metaData.type !== BlockEnum.AgentV2,
+      ),
+    [availableNodesMetaData, shouldUseAgentV2],
+  )
+
   return useMemo(() => {
     return {
-      nodes: availableNodesMetaData,
+      nodes: addableNodesMetaData,
       nodesMap: {
         ...availableNodesMetaDataMap,
         [BlockEnum.VariableAssigner]: availableNodesMetaDataMap?.[BlockEnum.VariableAggregator],
       },
     }
-  }, [availableNodesMetaData, availableNodesMetaDataMap])
+  }, [addableNodesMetaData, availableNodesMetaDataMap])
 }
