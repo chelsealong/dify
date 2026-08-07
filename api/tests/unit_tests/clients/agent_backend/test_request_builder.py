@@ -44,7 +44,7 @@ from clients.agent_backend import (
     AgentBackendWorkflowNodeRunInput,
     redact_for_agent_backend_log,
 )
-from clients.agent_backend.request_builder import DIFY_DRIVE_LAYER_ID, DIFY_SHELL_LAYER_ID
+from clients.agent_backend.request_builder import DIFY_DRIVE_LAYER_ID, DIFY_SHELL_LAYER_ID, _agent_model_settings
 
 
 def _run_input() -> AgentBackendWorkflowNodeRunInput:
@@ -187,6 +187,17 @@ def test_request_builder_sets_model_and_output_layer_contract_ids():
     assert cast(DifyPluginLLMLayerConfig, layers[DIFY_AGENT_MODEL_LAYER_ID].config).plugin_id == "langgenius/openai"
     assert layers[DIFY_AGENT_MODEL_LAYER_ID].deps == {"execution_context": DIFY_EXECUTION_CONTEXT_LAYER_ID}
     assert layers[DIFY_AGENT_OUTPUT_LAYER_ID].type == DIFY_OUTPUT_LAYER_TYPE_ID
+
+
+def test_agent_model_settings_forwards_plugin_specific_parameters_via_extra_body():
+    sanitized = _agent_model_settings(
+        {"temperature": 0.5, "enable_thinking": True, "response_format": {"type": "text"}}
+    )
+
+    assert sanitized is not None
+    assert sanitized["temperature"] == 0.5
+    assert sanitized["extra_body"] == {"enable_thinking": True}
+    assert "response_format" not in sanitized
 
 
 def test_request_builder_adds_dify_plugin_tools_layer_when_configured():

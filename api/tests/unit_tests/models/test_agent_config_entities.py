@@ -2,11 +2,21 @@ import pytest
 
 from core.workflow.file_reference import build_file_reference
 from models.agent_config_entities import (
+    AgentSoulModelSettings,
     DeclaredArrayItem,
     DeclaredOutputChildConfig,
     DeclaredOutputConfig,
     DeclaredOutputType,
 )
+
+
+def test_model_settings_round_trip_preserves_plugin_specific_parameters() -> None:
+    settings = AgentSoulModelSettings.model_validate({"temperature": 0.5, "enable_thinking": True})
+
+    dumped = settings.model_dump(mode="json", exclude_none=True)
+
+    assert dumped["temperature"] == 0.5
+    assert dumped["enable_thinking"] is True
 
 
 def test_file_default_value_accepts_canonical_reference_mapping() -> None:

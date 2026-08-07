@@ -169,6 +169,12 @@ _AGENT_MODEL_SETTINGS_PASSTHROUGH_KEYS = (
     "max_tokens",
 )
 
+# Keys handled explicitly above/below. Anything else in Agent Soul model
+# settings is a plugin-declared parameter (e.g. Qwen's ``enable_thinking``,
+# see #40144) that ``ModelSettings`` has no dedicated field for, so it is
+# routed through ``extra_body`` instead of being silently dropped.
+_AGENT_MODEL_SETTINGS_RESERVED_KEYS = frozenset({*_AGENT_MODEL_SETTINGS_PASSTHROUGH_KEYS, "stop", "response_format"})
+
 
 def _agent_model_settings(settings: Mapping[str, JsonValue]) -> dict[str, JsonValue] | None:
     sanitized: dict[str, JsonValue] = {
@@ -177,6 +183,13 @@ def _agent_model_settings(settings: Mapping[str, JsonValue]) -> dict[str, JsonVa
     stop = settings.get("stop")
     if isinstance(stop, list) and stop:
         sanitized["stop_sequences"] = stop
+    extra_body: dict[str, JsonValue] = {
+        key: value
+        for key, value in settings.items()
+        if key not in _AGENT_MODEL_SETTINGS_RESERVED_KEYS and value is not None
+    }
+    if extra_body:
+        sanitized["extra_body"] = extra_body
     return sanitized or None
 
 

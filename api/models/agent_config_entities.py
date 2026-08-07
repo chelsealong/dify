@@ -527,8 +527,14 @@ class AgentModelResponseFormatConfig(AgentFlexibleConfig):
     type: str | None = Field(default=None, max_length=64)
 
 
-class AgentSoulModelSettings(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+class AgentSoulModelSettings(AgentFlexibleConfig):
+    """Model call parameters for an Agent Soul model.
+
+    Keeps ``extra="allow"`` (via ``AgentFlexibleConfig``) so parameters a model
+    plugin declares via ``parameter_rules`` beyond the common OpenAI-style ones
+    below (e.g. Qwen's ``enable_thinking``) survive save/publish instead of
+    being silently dropped (#40144).
+    """
 
     temperature: float | None = None
     top_p: float | None = None
