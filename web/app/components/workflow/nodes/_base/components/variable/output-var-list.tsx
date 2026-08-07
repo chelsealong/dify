@@ -6,7 +6,7 @@ import { toast } from '@langgenius/dify-ui/toast'
 import { useDebounceFn } from 'ahooks'
 import { produce } from 'immer'
 import * as React from 'react'
-import { useCallback } from 'react'
+import { useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import Input from '@/app/components/base/input'
 import { checkKeys, replaceSpaceWithUnderscoreInVarNameInput } from '@/utils/var'
@@ -29,6 +29,16 @@ const OutputVarList: FC<Props> = ({ readonly, outputs, outputKeyOrders, onChange
       variable: key,
       variable_type: outputs[key]?.type!,
     }
+  })
+
+  // Remembers each row's own entry (by index) from the last render where its
+  // name didn't collide with another row, so a row that types through an
+  // existing name and then diverges to a new unique name gets its own prior
+  // entry back instead of the entry it was transiently sharing.
+  const ownEntryRef = useRef<Record<number, OutputVar[string]>>({})
+  list.forEach((item, i) => {
+    const isShared = list.some((other, j) => j !== i && other.variable === item.variable)
+    if (!isShared) ownEntryRef.current[i] = outputs[item.variable]!
   })
 
   const { run: validateVarInput } = useDebounceFn(
@@ -65,9 +75,11 @@ const OutputVarList: FC<Props> = ({ readonly, outputs, outputKeyOrders, onChange
 
         const newOutputs = produce(outputs, (draft) => {
           // Only take over the target key's entry if no other row already owns it,
-          // otherwise typing through an existing name would destroy that row's declaration
+          // otherwise typing through an existing name would destroy that row's declaration.
+          // Use this row's own remembered entry rather than draft[oldKey], since oldKey may
+          // currently be a shared entry that belongs to a different row (typed through earlier).
           if (!list.some((item, i) => i !== index && item.variable === newKey))
-            draft[newKey] = draft[oldKey]!
+            draft[newKey] = ownEntryRef.current[index] ?? draft[oldKey]!
           // Only delete old key if no other entry shares this name
           if (!list.some((item, i) => i !== index && item.variable === oldKey)) delete draft[oldKey]
         })

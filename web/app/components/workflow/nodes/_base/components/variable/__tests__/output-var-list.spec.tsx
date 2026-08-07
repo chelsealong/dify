@@ -94,6 +94,49 @@ describe('OutputVarList', () => {
       expect(newOutputs.a).toEqual({ type: 'array[object]', children: null })
     })
 
+    it("should preserve the acting row's own type after typing through another row's name and diverging to a new unique name", () => {
+      const outputs = createOutputs({ a: 'array[object]', var_2: 'string' })
+      const outputKeyOrders = ['a', 'var_2']
+
+      let captured: OutputVar | undefined
+      const { rerender } = render(
+        <OutputVarList
+          readonly={false}
+          outputs={outputs}
+          outputKeyOrders={outputKeyOrders}
+          onChange={(newOutputs) => {
+            captured = newOutputs
+          }}
+          onRemove={vi.fn()}
+        />,
+      )
+
+      // Step 1: row 1 ('var_2') is typed through row 0's existing name 'a'
+      fireEvent.change(screen.getAllByRole('textbox')[1]!, { target: { value: 'a' } })
+      expect(captured!.var_2).toBeUndefined()
+
+      // Simulate the parent applying the change: both rows now show 'a'
+      rerender(
+        <OutputVarList
+          readonly={false}
+          outputs={captured!}
+          outputKeyOrders={['a', 'a']}
+          onChange={(newOutputs) => {
+            captured = newOutputs
+          }}
+          onRemove={vi.fn()}
+        />,
+      )
+
+      // Step 2: row 1 diverges to a brand-new unique name
+      fireEvent.change(screen.getAllByRole('textbox')[1]!, { target: { value: 'ab' } })
+
+      // Row 1 must keep its own original type ('string'), not row 0's ('array[object]')
+      expect(captured!.ab).toEqual({ type: 'string', children: null })
+      // Row 0's declaration must remain untouched throughout
+      expect(captured!.a).toEqual({ type: 'array[object]', children: null })
+    })
+
     it('should keep outputs key alive when duplicate is renamed back to unique name', () => {
       // Step 1: rename var_2 -> var_1 (creates duplicate)
       const outputs = createOutputs({ var_1: 'string', var_2: 'number' })
