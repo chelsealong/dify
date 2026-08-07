@@ -84,6 +84,16 @@ describe('OutputVarList', () => {
       expect(newOutputs.var_1).toEqual({ type: 'string', children: null })
     })
 
+    it("should not overwrite another row's declared type when typing through its name", () => {
+      const outputs = createOutputs({ a: 'array[object]', var_2: 'string' })
+      const outputKeyOrders = ['a', 'var_2']
+
+      const newOutputs = collectRenameResult(outputs, outputKeyOrders, 1, 'a')
+
+      // Row 0's declaration must survive untouched even though row 1 was typed to the same name
+      expect(newOutputs.a).toEqual({ type: 'array[object]', children: null })
+    })
+
     it('should keep outputs key alive when duplicate is renamed back to unique name', () => {
       // Step 1: rename var_2 -> var_1 (creates duplicate)
       const outputs = createOutputs({ var_1: 'string', var_2: 'number' })

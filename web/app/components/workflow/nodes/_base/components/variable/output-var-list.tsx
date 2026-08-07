@@ -64,7 +64,10 @@ const OutputVarList: FC<Props> = ({ readonly, outputs, outputKeyOrders, onChange
         )
 
         const newOutputs = produce(outputs, (draft) => {
-          draft[newKey] = draft[oldKey]!
+          // Only take over the target key's entry if no other row already owns it,
+          // otherwise typing through an existing name would destroy that row's declaration
+          if (!list.some((item, i) => i !== index && item.variable === newKey))
+            draft[newKey] = draft[oldKey]!
           // Only delete old key if no other entry shares this name
           if (!list.some((item, i) => i !== index && item.variable === oldKey)) delete draft[oldKey]
         })
