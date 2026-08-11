@@ -9,13 +9,15 @@ import logging
 from typing import override
 
 from sqlalchemy.engine import Engine
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 
 from core.repositories.factory import WorkflowExecutionRepository
 from graphon.entities import WorkflowExecution
-from models import Account, CreatorUserRole, EndUser
+from models import Account, CreatorUserRole, EndUser, WorkflowRun
 from models.enums import WorkflowRunTriggeredFrom
 from tasks.workflow_execution_tasks import (
+    create_workflow_run_from_execution,
     save_workflow_execution_task,
 )
 
@@ -105,6 +107,11 @@ class CeleryWorkflowExecutionRepository(WorkflowExecutionRepository):
             execution: The WorkflowExecution instance to save or update
         """
         try:
+            # Guarantee the row exists before returning, so that code paths which
+            # look it up synchronously right after `save()` (e.g. HITL pause
+            # creation) don't race the worker that processes the task queued below.
+            self._ensure_workflow_run_exists(execution)
+
             # Serialize execution for Celery task
             execution_data = execution.model_dump()
 
@@ -125,3 +132,31 @@ class CeleryWorkflowExecutionRepository(WorkflowExecutionRepository):
             # In case of Celery failure, we could implement a fallback to synchronous save
             # For now, we'll re-raise the exception
             raise
+
+    def _ensure_workflow_run_exists(self, execution: WorkflowExecution) -> None:
+        """
+        Synchronously create the WorkflowRun row if it doesn't exist yet.
+
+        This is a minimal, fast insert of the row's identity columns; the full
+        execution state is still written by the async Celery task. It only
+        needs to happen once per workflow run, so subsequent calls are a
+        cheap existence check.
+        """
+        with self._session_factory() as session:
+            if session.get(WorkflowRun, execution.id_) is not None:
+                return
+            workflow_run = create_workflow_run_from_execution(
+                execution=execution,
+                tenant_id=self._tenant_id,
+                app_id=self._app_id or "",
+                triggered_from=self._triggered_from or WorkflowRunTriggeredFrom.APP_RUN,
+                creator_user_id=self._creator_user_id,
+                creator_user_role=self._creator_user_role,
+            )
+            session.add(workflow_run)
+            try:
+                session.commit()
+            except IntegrityError:
+                # Another concurrent save already created the row; the async
+                # task will still update it with the latest execution state.
+                session.rollback()

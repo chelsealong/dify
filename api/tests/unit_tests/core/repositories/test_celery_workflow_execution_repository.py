@@ -14,7 +14,7 @@ from core.repositories.celery_workflow_execution_repository import CeleryWorkflo
 from graphon.entities import WorkflowExecution
 from graphon.enums import WorkflowType
 from libs.datetime_utils import naive_utc_now
-from models import Account, EndUser, Tenant
+from models import Account, EndUser, Tenant, WorkflowRun
 from models.enums import WorkflowRunTriggeredFrom
 
 RESOURCE_TENANT_ID = "resource-tenant-id"
@@ -26,8 +26,11 @@ def mock_session_factory():
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
 
-    # Create a real sessionmaker with in-memory SQLite for testing
+    # Create a real sessionmaker with in-memory SQLite for testing. Only the
+    # `workflow_runs` table is created, since `save()` now synchronously
+    # checks/creates that row before queuing the Celery task.
     engine = create_engine("sqlite:///:memory:")
+    WorkflowRun.__table__.create(engine)
     return sessionmaker(bind=engine)
 
 
@@ -169,6 +172,34 @@ class TestCeleryWorkflowExecutionRepository:
 
         # Verify no task tracking occurs (no _pending_saves attribute)
         assert not hasattr(repo, "_pending_saves")
+
+    @patch("core.repositories.celery_workflow_execution_repository.save_workflow_execution_task")
+    def test_save_creates_workflow_run_row_before_returning(
+        self, mock_task, mock_session_factory, mock_account, sample_workflow_execution
+    ):
+        """
+        `save()` must guarantee the WorkflowRun row already exists once it
+        returns, even though the Celery task that fully persists it hasn't
+        run yet (mocked here). Otherwise code that looks the row up right
+        after a save, such as HITL pause creation, can race the worker.
+        """
+        repo = CeleryWorkflowExecutionRepository(
+            session_factory=mock_session_factory,
+            tenant_id=RESOURCE_TENANT_ID,
+            user=mock_account,
+            app_id="test-app",
+            triggered_from=WorkflowRunTriggeredFrom.APP_RUN,
+        )
+
+        repo.save(sample_workflow_execution)
+
+        # The Celery task was only queued, not executed, yet the row must
+        # already be present.
+        mock_task.delay.assert_called_once()
+        with mock_session_factory() as session:
+            workflow_run = session.get(WorkflowRun, sample_workflow_execution.id_)
+        assert workflow_run is not None
+        assert workflow_run.tenant_id == RESOURCE_TENANT_ID
 
     @patch("core.repositories.celery_workflow_execution_repository.save_workflow_execution_task")
     def test_save_handles_celery_failure(

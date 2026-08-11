@@ -59,7 +59,7 @@ def save_workflow_execution_task(
                 logger.debug("Updated existing workflow run: %s", execution.id_)
             else:
                 # Create new workflow run
-                workflow_run = _create_workflow_run_from_execution(
+                workflow_run = create_workflow_run_from_execution(
                     execution=execution,
                     tenant_id=tenant_id,
                     app_id=app_id,
@@ -79,7 +79,7 @@ def save_workflow_execution_task(
         raise self.retry(exc=e, countdown=60 * (2**self.request.retries))
 
 
-def _create_workflow_run_from_execution(
+def create_workflow_run_from_execution(
     execution: WorkflowExecution,
     tenant_id: str,
     app_id: str,
@@ -89,6 +89,10 @@ def _create_workflow_run_from_execution(
 ) -> WorkflowRun:
     """
     Create a WorkflowRun database model from a WorkflowExecution domain entity.
+
+    Shared by the async Celery task and by
+    ``CeleryWorkflowExecutionRepository``'s synchronous existence check, so
+    both paths build the row identically.
     """
     workflow_run = WorkflowRun()
     workflow_run.id = execution.id_
