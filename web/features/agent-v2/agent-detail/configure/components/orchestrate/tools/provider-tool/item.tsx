@@ -162,7 +162,8 @@ function CredentialStatus({
     credentialType?: AgentProviderTool['credentialType'],
   ) => void
 }) {
-  const canSwitchCredential = tool.providerType === CollectionType.builtIn && tool.allowDelete
+  const isBuiltinProvider = tool.providerType === CollectionType.builtIn
+  const canSwitchCredential = isBuiltinProvider && tool.allowDelete
   const handleAuthorizationItemClick = useCallback(
     (id: string) => {
       onCredentialChange(
@@ -182,6 +183,8 @@ function CredentialStatus({
   if (tool.credentialVariant === 'none') return null
 
   if (tool.credentialVariant === 'unauthorized') {
+    if (!isBuiltinProvider) return null
+
     return <UnauthorizedCredentialStatus tool={tool} onCredentialChange={onCredentialChange} />
   }
 

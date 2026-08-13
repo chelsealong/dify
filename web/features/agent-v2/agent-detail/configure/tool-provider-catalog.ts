@@ -201,9 +201,11 @@ export function getProviderCredentialType(
 ): AgentProviderTool['credentialType'] {
   if (!provider) return undefined
 
+  if (provider.type !== CollectionType.builtIn) return undefined
+
   if (Object.keys(provider.team_credentials ?? {}).length > 0) return 'api-key'
 
-  if (provider.type === CollectionType.builtIn && provider.allow_delete) return 'oauth2'
+  if (provider.allow_delete) return 'oauth2'
 
   return undefined
 }
