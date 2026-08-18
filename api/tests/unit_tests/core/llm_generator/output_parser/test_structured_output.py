@@ -334,6 +334,14 @@ class TestStructuredOutput:
         assert isinstance(called_prompt_messages[0], SystemPromptMessage)
         assert json.dumps({"type": "object"}) in called_prompt_messages[0].content
 
+        # The native `json_schema` parameter is still passed through unconditionally, so a
+        # provider that natively enforces the schema via a mechanism other than a
+        # `response_format` rule (e.g. forced tool-calling reading `json_schema` directly)
+        # keeps working: the prompt fallback layers on top rather than replacing it.
+        called_model_parameters = model_instance.invoke_llm.call_args.kwargs["model_parameters"]
+        assert "json_schema" in called_model_parameters
+        assert json.loads(called_model_parameters["json_schema"])["schema"] == {"type": "object"}
+
     def test_invoke_llm_with_structured_output_no_string_error(self):
         model_schema = MagicMock(spec=AIModelEntity)
         model_schema.support_structure_output = False

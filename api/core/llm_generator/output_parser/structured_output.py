@@ -127,6 +127,15 @@ def invoke_llm_with_structured_output(
             # signals the plugin to actually enforce it (see _handle_native_json_schema).
             # Fall back to prompt-based schema injection so the schema is not silently
             # dropped when the plugin never reads `json_schema` from model_parameters.
+            #
+            # Note for providers that natively enforce schemas through a mechanism other
+            # than a `response_format` rule (e.g. forced tool-calling): this also adds a
+            # redundant prompt instruction on top of that working native enforcement. This
+            # is a deliberate, discussed trade-off (see #40907) — extra prompt tokens, not a
+            # correctness regression, since the native mechanism still governs the response.
+            # Do not "fix" this by trying to detect that case here; there is no reliable
+            # signal available in this repo to distinguish it from the actually-broken
+            # plugin case this fallback exists for.
             prompt_messages = _handle_prompt_based_schema(
                 prompt_messages=prompt_messages,
                 structured_output_schema=json_schema,
