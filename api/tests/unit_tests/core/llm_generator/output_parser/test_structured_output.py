@@ -301,6 +301,39 @@ class TestStructuredOutput:
         assert result.structured_output == {"result": "success"}
         assert result.system_fingerprint == "fp_prompt"
 
+    def test_invoke_llm_with_structured_output_native_without_response_format_falls_back_to_prompt(self):
+        # A model can declare `support_structure_output=True` while its plugin has no
+        # `response_format` parameter rule (e.g. a plugin YAML declares the feature but
+        # llm.py never reads `json_schema`). In that case the schema must still reach the
+        # model via prompt injection instead of being silently dropped.
+        model_schema = MagicMock(spec=AIModelEntity)
+        model_schema.support_structure_output = True
+        model_schema.parameter_rules = []
+        model_schema.model = "claude-sonnet-4-6"
+
+        model_instance = MagicMock(spec=ModelInstance)
+        mock_result = MagicMock(spec=LLMResult)
+        mock_result.message = AssistantPromptMessage(content='{"result": "success"}')
+        mock_result.model = "claude-sonnet-4-6"
+        mock_result.usage = LLMUsage.empty_usage()
+        mock_result.system_fingerprint = "fp_native_no_rule"
+        mock_result.prompt_messages = []
+
+        model_instance.invoke_llm.return_value = mock_result
+
+        invoke_llm_with_structured_output(
+            provider="anthropic",
+            model_schema=model_schema,
+            model_instance=model_instance,
+            prompt_messages=[UserPromptMessage(content="hi")],
+            json_schema={"type": "object"},
+            stream=False,
+        )
+
+        called_prompt_messages = model_instance.invoke_llm.call_args.kwargs["prompt_messages"]
+        assert isinstance(called_prompt_messages[0], SystemPromptMessage)
+        assert json.dumps({"type": "object"}) in called_prompt_messages[0].content
+
     def test_invoke_llm_with_structured_output_no_string_error(self):
         model_schema = MagicMock(spec=AIModelEntity)
         model_schema.support_structure_output = False

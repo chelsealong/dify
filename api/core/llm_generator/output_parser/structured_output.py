@@ -122,6 +122,15 @@ def invoke_llm_with_structured_output(
         model_parameters = _handle_native_json_schema(
             provider, model_schema, json_schema, model_parameters_with_json_schema, model_schema.parameter_rules
         )
+        if "response_format" not in model_parameters:
+            # The model declares structured output support, but no parameter rule
+            # signals the plugin to actually enforce it (see _handle_native_json_schema).
+            # Fall back to prompt-based schema injection so the schema is not silently
+            # dropped when the plugin never reads `json_schema` from model_parameters.
+            prompt_messages = _handle_prompt_based_schema(
+                prompt_messages=prompt_messages,
+                structured_output_schema=json_schema,
+            )
     else:
         # Set appropriate response format based on model capabilities
         _set_response_format(model_parameters_with_json_schema, model_schema.parameter_rules)
