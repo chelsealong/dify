@@ -1,5 +1,5 @@
 from datetime import datetime
-from inspect import getsource, unwrap
+from inspect import getclosurevars, getsource, unwrap
 from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import MagicMock, Mock, call
@@ -62,6 +62,7 @@ from controllers.console.app.message import (
     AgentMessageFeedbackApi,
     AgentMessageSuggestedQuestionApi,
 )
+from controllers.console.wraps import RBACPermission, RBACResourceScope
 from core.app.entities.app_invoke_entities import InvokeFrom
 from models.account import Account, TenantAccountRole
 from models.agent import Agent, AgentConfigDraftType, AgentScope, AgentSource, AgentStatus
@@ -299,6 +300,17 @@ def test_agent_v2_console_routes_are_agent_id_first() -> None:
 def test_agent_app_write_routes_do_not_reuse_app_billing_quota() -> None:
     for route_class in (AgentAppListApi, AgentAppCopyApi):
         assert '@cloud_edition_billing_resource_check("apps")' not in getsource(route_class)
+
+
+def test_agent_app_detail_get_requires_agent_manage_rbac() -> None:
+    """GET must enforce the same AGENT_MANAGE RBAC gate as its sibling PUT/DELETE methods."""
+    rbac_wrapper = unwrap(
+        AgentAppApi.get, stop=lambda wrapper: "rbac_permission_required" in wrapper.__code__.co_qualname
+    )
+    rbac_config = getclosurevars(rbac_wrapper).nonlocals
+    assert rbac_config["resource_type"] == RBACResourceScope.WORKSPACE
+    assert rbac_config["scene"] == RBACPermission.AGENT_MANAGE
+    assert rbac_config["resource_required"] is False
 
 
 @pytest.fixture
