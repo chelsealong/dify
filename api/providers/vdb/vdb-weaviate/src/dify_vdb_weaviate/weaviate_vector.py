@@ -278,22 +278,6 @@ class WeaviateVector(BaseVector):
                 logger.warning("Could not add property %s: %s", prop.name, e)
 
     @override
-    def _get_uuids(self, documents: list[Document]) -> list[str]:
-        """
-        Generates deterministic UUIDs for documents based on their content.
-
-        Uses UUID5 with URL namespace to ensure consistent IDs for identical content.
-        """
-        URL_NAMESPACE = _uuid.UUID("6ba7b811-9dad-11d1-80b4-00c04fd430c8")
-
-        uuids = []
-        for doc in documents:
-            uuid_val = _uuid.uuid5(URL_NAMESPACE, doc.page_content)
-            uuids.append(str(uuid_val))
-
-        return uuids
-
-    @override
     def add_texts(self, documents: list[Document], embeddings: list[list[float]], **kwargs):
         """
         Adds documents with their embeddings to the collection.

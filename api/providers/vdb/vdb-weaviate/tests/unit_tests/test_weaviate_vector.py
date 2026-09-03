@@ -722,6 +722,41 @@ class TestWeaviateVector(unittest.TestCase):
         assert stored_props.get("doc_type") == "image", f"doc_type should be stored in properties, got: {stored_props}"
 
     @patch("dify_vdb_weaviate.weaviate_vector.weaviate")
+    def test_add_texts_uses_doc_id_as_object_uuid(self, mock_weaviate_module):
+        """Inserted object uuid must match doc_id, since delete_by_ids() deletes by that same id.
+
+        Regression test for orphaned vectors: previously the insert uuid was derived from
+        page_content (uuid5), which never matched the doc_id used for deletion, so
+        delete_by_ids() silently targeted non-existent objects and vectors leaked forever.
+        """
+        mock_client = MagicMock()
+        mock_client.is_ready.return_value = True
+        mock_weaviate_module.connect_to_custom.return_value = mock_client
+
+        mock_col = MagicMock()
+        mock_client.collections.use.return_value = mock_col
+
+        mock_batch = MagicMock()
+        mock_batch.__enter__ = MagicMock(return_value=mock_batch)
+        mock_batch.__exit__ = MagicMock(return_value=False)
+        mock_col.batch.dynamic.return_value = mock_batch
+
+        doc_id = "123e4567-e89b-12d3-a456-426614174000"
+        doc = Document(page_content="some segment content", metadata={"doc_id": doc_id})
+
+        wv = WeaviateVector(
+            collection_name=self.collection_name,
+            config=self.config,
+            attributes=self.attributes,
+        )
+
+        ids = wv.add_texts(documents=[doc], embeddings=[[0.1] * 128])
+
+        assert ids == [doc_id]
+        call_kwargs = mock_batch.add_object.call_args
+        assert call_kwargs.kwargs["uuid"] == doc_id
+
+    @patch("dify_vdb_weaviate.weaviate_vector.weaviate")
     def test_add_texts_falls_back_to_random_uuid_and_serializes_datetime_metadata(self, mock_weaviate_module):
         mock_client = MagicMock()
         mock_client.is_ready.return_value = True
